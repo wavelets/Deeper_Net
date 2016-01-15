@@ -27,26 +27,33 @@ function createModel(nGPU)
             local oChannels = v;
             local conv3 = cudnn.SpatialConvolution(iChannels,oChannels,3,3,1,1,1,1);
             features:add(conv3)
+            --features:add(nn.SpatialBatchNormalization(oChannels))
             features:add(cudnn.ReLU(true))
             iChannels = oChannels;
          end
       end
    end
+   features:add(cudnn.SpatialConvolution(512,4096,7,7))
+   --features:add(cudnn.ReLU(true))
+   features:add(nn.SpatialBatchNormalization(4096))
+   features:add(cudnn.ReLU(true))
+   
+   features:add(nn.SpatialDropout(0.5))
+   features:add(cudnn.SpatialConvolution(4096,4096,1,1))
+   --features:add(cudnn.ReLU(true))
+   features:add(nn.SpatialBatchNormalization(4096))
+   features:add(cudnn.ReLU(true))
+ 
+   features:add(nn.SpatialDropout(0.5))
 
    features:cuda()
    features = makeDataParallel(features, nGPU) -- defined in util.lua
 
+   
+
    local classifier = nn.Sequential()
-   classifier:add(nn.View(512*7*7))
-   classifier:add(nn.Linear(512*7*7, 4096))
-   classifier:add(nn.Threshold(0, 1e-6))
-   classifier:add(nn.BatchNormalization(4096, 1e-3))
-   classifier:add(nn.Dropout(0.5))
-   classifier:add(nn.Linear(4096, 4096))
-   classifier:add(nn.Threshold(0, 1e-6))
-   classifier:add(nn.BatchNormalization(4096, 1e-3))
-   classifier:add(nn.Dropout(0.5))
-   classifier:add(nn.Linear(4096, 1000))
+   classifier:add(cudnn.SpatialConvolution(4096, nClasses,1,1))
+   classifier:add(nn.View(nClasses))
    classifier:add(nn.LogSoftMax())
    classifier:cuda()
 

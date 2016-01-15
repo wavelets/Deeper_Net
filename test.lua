@@ -8,6 +8,7 @@
 --
 testLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
 
+
 local testDataIterator = function()
    testLoader:reset()
    return function() return testLoader:get_batch(false) end
@@ -18,6 +19,7 @@ local top1_center, loss
 local timer = torch.Timer()
 
 function test()
+   opt.testFlag = 1;
    print('==> doing epoch on validation data:')
    print("==> online epoch # " .. epoch)
 
@@ -72,7 +74,12 @@ function testBatch(inputsCPU, labelsCPU)
    inputs:resize(inputsCPU:size()):copy(inputsCPU)
    labels:resize(labelsCPU:size()):copy(labelsCPU)
 
-   local outputs = model:forward(inputs)
+   local outputs 
+   if opt.binaryWeight == 1 then
+      outputs = model:BinaryForward(inputs)
+   else
+      outputs = model:forward(inputs)
+   end
    local err = criterion:forward(outputs, labels)
    cutorch.synchronize()
    local pred = outputs:float()

@@ -23,6 +23,10 @@ opt = opts.parse(arg)
 nClasses = opt.nClasses
 
 paths.dofile('util.lua')
+paths.dofile('SpatialCMul.lua')
+paths.dofile('SelfIndex.lua')
+paths.dofile('CMaxTable.lua')
+
 paths.dofile('model.lua')
 opt.imageSize = model.imageSize or opt.imageSize
 opt.imageCrop = model.imageCrop or opt.imageCrop
@@ -37,6 +41,7 @@ os.execute('mkdir -p ' .. opt.save)
 
 
 paths.dofile('data.lua')
+
 paths.dofile('train.lua')
 paths.dofile('test.lua')
 

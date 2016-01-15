@@ -30,11 +30,16 @@ local sampleSize = {3, opt.cropSize, opt.cropSize}
 
 local function loadImage(path)
    local input = image.load(path, 3, 'float')
+   local random_scale = 1+torch.rand(1)[1]*(224/256)
+   if opt.testFlag == 1  then 
+      random_scale =1;
+   end
+
    -- find the smaller dimension, and resize it to loadSize (while keeping aspect ratio)
    if input:size(3) < input:size(2) then
-      input = image.scale(input, loadSize[2], loadSize[3] * input:size(2) / input:size(3))
+      input = image.scale(input, loadSize[2]*random_scale, loadSize[3]*random_scale* input:size(2) / input:size(3))
    else
-      input = image.scale(input, loadSize[2] * input:size(3) / input:size(2), loadSize[3])
+      input = image.scale(input, loadSize[2]*random_scale * input:size(3) / input:size(2), loadSize[3]*random_scale)
    end
    return input
 end
@@ -50,9 +55,10 @@ local mean,std
 -- function to load the image, jitter it appropriately (random crops etc.)
 local trainHook = function(self, path)
    collectgarbage()
+   opt.testFlag = 0
    local excep, input = pcall(loadImage,path);
    if not excep then
-      input = torch.CudaTensor(3,opt.imageSize,opt.imageSize):fill(100);
+      input = torch.Tensor(3,opt.imageSize,opt.imageSize):fill(100);
    end
    local iW = input:size(3)
    local iH = input:size(2)
@@ -115,6 +121,7 @@ end
 -- function to load the image
 testHook = function(self, path)
    collectgarbage()
+   opt.testFlag = 1
    local excep, input = pcall(loadImage,path);
    if not excep then
       input = torch.CudaTensor(3,opt.imageSize,opt.imageSize):fill(100);

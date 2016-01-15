@@ -48,10 +48,10 @@ local function paramsForEpoch(epoch)
     end
     local regimes = {
         -- start, end,    LR,   RP,
-        {  1,     3,   1e-0,   1 },
-        { 4,     7,    1e-1,   1  },
-        { 8,     12,   1e-2,   1 },
-        { 13,    16,   1e-3,   1 },
+        {  1,     10,   1e-1,   1 },
+        { 11,     15,    1e-2,   1  },
+        { 16,     20 ,  1e-3,   1 },
+        { 21,    30,   1e-4,   1 },
     }
     for _, row in ipairs(regimes) do
        if epoch >= row[1] and epoch <= row[2] then
@@ -74,6 +74,7 @@ local top1_epoch, loss_epoch
 -- 3. train - this function handles the high-level training loop,
 --            i.e. load data, train model, save model and state to disk
 function train()
+   opt.testFlag = 0; 
    print('==> doing epoch on training data:')
    print("==> online epoch # " .. epoch)
 
@@ -139,7 +140,9 @@ function train()
                if (name == 'output' or name == 'gradInput') then
                   if torch.type(field) == 'table' then
                      for i,f in ipairs(field) do
-                      val[name][i] = f.new()
+                      if torch.type(f) ~= 'table'  then 
+                        val[name][i] = f.new()
+                      end
                     end
                   else
                     val[name] = field.new()
@@ -161,6 +164,52 @@ local timer = torch.Timer()
 local dataTimer = torch.Timer()
 
 local parameters, gradParameters = model:getParameters()
+local convNodes = model:findModules('cudnn.SpatialConvolution')
+
+function model:BinaryForward(X)
+  local realParams = parameters:clone()
+  for i =1, #convNodes do
+     if i ~= #convNodes then
+       cutorch.setDevice(math.ceil(i/(#convNodes/opt.nGPU)))
+     else
+      cutorch.setDevice(opt.GPU)
+     end
+
+     local n = convNodes[i].weight[1]:nElement()
+     local s = convNodes[i].weight:size()
+     local m = convNodes[i].weight:norm(1,4):sum(3):sum(2):div(n);
+     --m=m:expand(s)
+     convNodes[i].weight:sign():cmul(m:expand(s))
+     --convNodes[i].bias:add(1):div(2):cmin(1):cmax(-1e-6):sign()
+   end
+   cutorch.setDevice(opt.GPU)
+  f = model:forward(X)
+  parameters:copy(realParams);
+  return f
+end
+
+function model:BinaryBackward(X,L)
+  local realParams = parameters:clone()
+  for i =1, #convNodes do
+     if i ~= #convNodes then
+       cutorch.setDevice(math.ceil(i/(#convNodes/opt.nGPU)))
+     else
+      cutorch.setDevice(opt.GPU)
+     end
+
+     local n = convNodes[i].weight[1]:nElement()
+     local s = convNodes[i].weight:size()
+     local m = convNodes[i].weight:norm(1,4):sum(3):sum(2):div(n);
+     --m=m:expand(s)--repeatTensor(1,s[2],s[3],s[4])
+     convNodes[i].weight:sign():cmul(m:expand(s))
+
+     --convNodes[i].bias:add(1):div(2):cmin(1):cmax(-1e-6):sign()
+   end
+   cutorch.setDevice(opt.GPU)
+  b = model:backward(X,L)
+  parameters:copy(realParams);
+  return b
+end
 
 -- 4. trainBatch - Used by train() to train a single batch after the data is loaded.
 function trainBatch(inputsCPU, labelsCPU)
@@ -174,14 +223,41 @@ function trainBatch(inputsCPU, labelsCPU)
    labels:resize(labelsCPU:size()):copy(labelsCPU)
 
    local err, outputs
-   feval = function(x)
-      model:zeroGradParameters()
-      outputs = model:forward(inputs)
-      err = criterion:forward(outputs, labels)
-      local gradOutputs = criterion:backward(outputs, labels)
-      model:backward(inputs, gradOutputs)
-      return err, gradParameters
-   end
+   if opt.binaryWeight == 1 then
+     feval = function(x)
+       model:zeroGradParameters()
+         local realParams = parameters:clone()
+         for i =1, #convNodes do
+           --if i ~= #convNodes then
+             cutorch.setDevice(math.ceil(i/(#convNodes/opt.nGPU)))
+           --else
+           --  cutorch.setDevice(opt.GPU)
+           --end
+
+           local n = convNodes[i].weight[1]:nElement()
+           local s = convNodes[i].weight:size()
+           local m = convNodes[i].weight:norm(1,4):sum(3):sum(2):div(n);
+           convNodes[i].weight:sign():cmul(m:expand(s))
+         end
+         cutorch.setDevice(opt.GPU)
+         outputs = model:forward(inputs)
+         err = criterion:forward(outputs, labels)
+         local gradOutputs = criterion:backward(outputs, labels)
+         model:backward(inputs, gradOutputs)
+         parameters:copy(realParams);
+         return err, gradParameters
+     end
+   else
+     feval = function(x)
+       model:zeroGradParameters()
+       outputs = model:forward(inputs)
+       err = criterion:forward(outputs, labels)
+       local gradOutputs = criterion:backward(outputs, labels)
+       model:backward(inputs, gradOutputs)
+       return err, gradParameters
+     end
+   end 
+
    for i = 1,optimState.repeatBatch do
      optim.sgd(feval, parameters, optimState)
    end
