@@ -8,7 +8,7 @@ function createModel(nGPU)
    -- cfg = {nElems, nChannels, Stride}
    if modelType == 'A' then
       --cfg = {{4,64},{'M',2},{'D',128},{3,128},{'M',2},{'D',256},{4,256},{'M',2},{'D',512},{3,512},{'D',512}}
-      cfg = {{3,64,128},{'M',2},{3,128,256},{'M',2},{6,256,512},{'M',2},{3,512,512}}
+      cfg = {{3,64,128},{'M',2},{4,128,256},{'M',2},{4,256,512},{'M',2},{4,512,512}}
    elseif modelType == 'B' then
       cfg = {{2,64},{'M',2},{'D',128},{3,128},{'M',2},{'D',256},{6,256},{'M',2},{'D',256},{2,256}}
    else
@@ -26,6 +26,7 @@ function createModel(nGPU)
          bottleneck:add(cudnn.SpatialConvolution(iChannels,iChannels,3,3,1,1,1,1))
          bottleneck:add(cudnn.ReLU(true))
          bottleneck:add(cudnn.SpatialBatchNormalization(iChannels))
+         
          --bottleneck:add(cudnn.SpatialConvolution(iChannels/4,oChannels,1,1,1,1,0,0))
          --bottleneck:add(cudnn.ReLU(true))
          --bottleneck:add(nn.SpatialBatchNormalization(oChannels))
@@ -36,6 +37,10 @@ function createModel(nGPU)
       end
       upElem:add(nn.FlattenTable()):add(nn.JoinTable(2))
       upElem:add(cudnn.SpatialConvolution(iChannels*(nNodes+1),oChannels,1,1,1,1,0,0)) 
+      
+      --upElem:add(nn.FlattenTable()):add(nn.CAddTable())
+      --upElem:add(cudnn.SpatialConvolution(iChannels,oChannels,1,1,1,1,0,0)) 
+
       upElem:add(cudnn.SpatialBatchNormalization(oChannels))           
       upElem:add(nn.ConcatTable():add(nn.Identity()))
       
@@ -46,8 +51,10 @@ function createModel(nGPU)
    features:add(cudnn.SpatialConvolution(3,cfg[1][2],7,7,2,2,3,3));
    features:add(cudnn.ReLU(true))
    features:add(cudnn.SpatialBatchNormalization(cfg[1][2]));
+
    
    features:add(cudnn.SpatialMaxPooling(2,2))
+   
    features:add(nn.ConcatTable():add(nn.Identity()))
    --features:apply(rand_initialize)
    
