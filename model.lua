@@ -28,7 +28,6 @@ else
    paths.dofile('models/' .. config .. '.lua')
    print('=> Creating model from file: models/' .. config .. '.lua')
    model = createModel(opt.nGPU) -- for the model creation code, check the models/ folder
-
 end
 
 -- 2. Create Criterion

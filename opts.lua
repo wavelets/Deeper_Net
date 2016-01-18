@@ -29,7 +29,7 @@ function M.parse(arg)
     cmd:option('-nGPU',               1, 'Number of GPUs to use by default')
     cmd:option('-backend',     'cudnn', 'Options: cudnn | ccn2 | cunn')
     ------------- Data options ------------------------
-    cmd:option('-nDonkeys',        8, 'number of donkeys to initialize (data loading threads)')
+    cmd:option('-nDonkeys',        12, 'number of donkeys to initialize (data loading threads)')
     cmd:option('-imageSize',         256,    'Smallest side of the resized image')
     cmd:option('-cropSize',          224,    'Height and Width of image crop to be used as input layer')
     cmd:option('-nClasses',        1000, 'number of classes in the dataset')
@@ -48,6 +48,8 @@ function M.parse(arg)
     cmd:option('-retrain',     'none', 'provide path to model to retrain with')
     cmd:option('-optimState',  'none', 'provide path to an optimState to reload from')
     cmd:option('-binaryWeight',     0, 'Binary Weights')
+    cmd:option('-shortCut',         'none', 'Options: none | max | softmax | sum')
+    cmd:option('-scaleAggregation', 'none', 'Options: none | max | softmax | sum | pca')
     
     
     cmd:text()
