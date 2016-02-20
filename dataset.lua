@@ -127,7 +127,7 @@ function dataset:__init(...)
    local wc = 'wc'
    local cut = 'cut'
    local find = 'find'
-   if jit.os == 'OSX' then
+   if ffi.os == 'OSX' then
       wc = 'gwc'
       cut = 'gcut'
       find = 'gfind'
@@ -302,7 +302,7 @@ end
 
 -- getByClass
 function dataset:getByClass(class)
-   local index = math.ceil(torch.uniform() * self.classListSample[class]:nElement())
+   local index = math.max(1, math.ceil(torch.uniform() * self.classListSample[class]:nElement()))
    local imgpath = ffi.string(torch.data(self.imagePath[self.classListSample[class][index]]))
    return self:sampleHookTrain(imgpath)
 end

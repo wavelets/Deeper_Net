@@ -47,48 +47,45 @@ local function paramsForEpoch(epoch)
         return { }
     end
     local regimes = {
-        -- start, end,    LR,   RP,
-        {  1,     10,   1e-1,   1 },
-        { 11,     15,    1e-2,   1  },
-        { 16,     20 ,  1e-3,   1 },
-        { 21,    30,   1e-4,   1 },
+        -- start, end,    LR,   WD,
+        { 1,     5,    1e-1,   1e-4 },
+        { 6,     10,   1e-2,   1e-4  },
+        { 11,    15,   1e-3,      0},
+        { 16,    52,   1e-4,      0},
+        { 53,    1e8,   1e-4,     0 },
     }
+
     for _, row in ipairs(regimes) do
-       if epoch >= row[1] and epoch <= row[2] then
-          return { learningRate=row[3], weightDecay=1e-4, repeatBatch=row[4] }, epoch == row[1]
-       end
+        if epoch >= row[1] and epoch <= row[2] then
+            return { learningRate=row[3], weightDecay=row[4] }, epoch == row[1]
+        end
     end
---     local c= 5e-4;
---     local A = 0.112;
---     local T = 7;
---     local t =epoch
---     local u = A*(1+(c/A)*(t/T))/(1+(c/A)*((t^4)/T)+T*(t^2)/(T^2))
--- return {learningRate = u, weightDecay=0}, epoch ==epoch
 end
 
 -- 2. Create loggers.
 trainLogger = optim.Logger(paths.concat(opt.save, 'train.log'))
 local batchNumber
-local top1_epoch, loss_epoch
+local top1Sum, top5Sum, loss_epoch
 
 -- 3. train - this function handles the high-level training loop,
 --            i.e. load data, train model, save model and state to disk
 function train()
-   opt.testFlag = 0; 
    print('==> doing epoch on training data:')
    print("==> online epoch # " .. epoch)
 
    local params, newRegime = paramsForEpoch(epoch)
    if newRegime then
-      optimState = {
-         learningRate = params.learningRate,
-         learningRateDecay = 0.0,
-         momentum = opt.momentum,
-         dampening = 0.0,
-         weightDecay = params.weightDecay,
-         repeatBatch = params.repeatBatch
-      }
+      optimState.learningRate = params.learningRate
+      optimState.learningRateDecay = 0.0
+      optimState.momentum = opt.momentum
+      optimState.dampening = 0.0
+      optimState.weightDecay = params.weightDecay
+      if opt.optimType == "adam" then
+        optimState.learningRate =  0.01*optimState.learningRate
+      end
    end
+   
+
    batchNumber = 0
    cutorch.synchronize()
 
@@ -96,8 +93,9 @@ function train()
    model:training()
 
    local tm = torch.Timer()
-   top1_epoch = 0
-   loss_epoch = 0
+   top1Sum = 0
+   top5Sum = 0
+   loss_epoch = 0 
    for i=1,opt.epochSize do
       -- queue jobs to data-workers
       donkeys:addjob(
@@ -114,17 +112,18 @@ function train()
    donkeys:synchronize()
    cutorch.synchronize()
 
-   top1_epoch = top1_epoch * 100 / (opt.batchSize * opt.epochSize)
+   
    loss_epoch = loss_epoch / opt.epochSize
 
    trainLogger:add{
-      ['% top1 accuracy (train set)'] = top1_epoch,
+      ['% top1 accuracy (train set)'] = top1Sum/opt.epochSize,
+      ['% top5 accuracy (train set)'] = top5Sum/opt.epochSize,
       ['avg loss (train set)'] = loss_epoch
    }
    print(string.format('Epoch: [%d][TRAINING SUMMARY] Total Time(s): %.2f\t'
                           .. 'average loss (per batch): %.2f \t '
                           .. 'accuracy(%%):\t top-1 %.2f\t',
-                       epoch, tm:time().real, loss_epoch, top1_epoch))
+                       epoch, tm:time().real, loss_epoch, top1Sum/opt.epochSize))
    print('\n')
 
    -- save model
@@ -132,26 +131,7 @@ function train()
 
    -- clear the intermediate states in the model before saving to disk
    -- this saves lots of disk space
-   local function sanitize(net)
-      local list = net:listModules()
-      for _,val in ipairs(list) do
-            for name,field in pairs(val) do
-               if torch.type(field) == 'cdata' then val[name] = nil end
-               if (name == 'output' or name == 'gradInput') then
-                  if torch.type(field) == 'table' then
-                     for i,f in ipairs(field) do
-                      if torch.type(f) ~= 'table'  then 
-                        val[name][i] = f.new()
-                      end
-                    end
-                  else
-                    val[name] = field.new()
-                end
-               end
-            end
-      end
-   end
-   sanitize(model)
+   model:clearState()
    saveDataParallel(paths.concat(opt.save, 'model_' .. epoch .. '.t7'), model) -- defined in util.lua
    torch.save(paths.concat(opt.save, 'optimState_' .. epoch .. '.t7'), optimState)
 end -- of train()
@@ -164,52 +144,9 @@ local timer = torch.Timer()
 local dataTimer = torch.Timer()
 
 local parameters, gradParameters = model:getParameters()
+local realParams = parameters:clone()
 local convNodes = model:findModules('cudnn.SpatialConvolution')
 
-function model:BinaryForward(X)
-  local realParams = parameters:clone()
-  for i =1, #convNodes do
-     if i ~= #convNodes then
-       cutorch.setDevice(math.ceil(i/(#convNodes/opt.nGPU)))
-     else
-      cutorch.setDevice(opt.GPU)
-     end
-
-     local n = convNodes[i].weight[1]:nElement()
-     local s = convNodes[i].weight:size()
-     local m = convNodes[i].weight:norm(1,4):sum(3):sum(2):div(n);
-     --m=m:expand(s)
-     convNodes[i].weight:sign():cmul(m:expand(s))
-     --convNodes[i].bias:add(1):div(2):cmin(1):cmax(-1e-6):sign()
-   end
-   cutorch.setDevice(opt.GPU)
-  f = model:forward(X)
-  parameters:copy(realParams);
-  return f
-end
-
-function model:BinaryBackward(X,L)
-  local realParams = parameters:clone()
-  for i =1, #convNodes do
-     if i ~= #convNodes then
-       cutorch.setDevice(math.ceil(i/(#convNodes/opt.nGPU)))
-     else
-      cutorch.setDevice(opt.GPU)
-     end
-
-     local n = convNodes[i].weight[1]:nElement()
-     local s = convNodes[i].weight:size()
-     local m = convNodes[i].weight:norm(1,4):sum(3):sum(2):div(n);
-     --m=m:expand(s)--repeatTensor(1,s[2],s[3],s[4])
-     convNodes[i].weight:sign():cmul(m:expand(s))
-
-     --convNodes[i].bias:add(1):div(2):cmin(1):cmax(-1e-6):sign()
-   end
-   cutorch.setDevice(opt.GPU)
-  b = model:backward(X,L)
-  parameters:copy(realParams);
-  return b
-end
 
 -- 4. trainBatch - Used by train() to train a single batch after the data is loaded.
 function trainBatch(inputsCPU, labelsCPU)
@@ -222,67 +159,54 @@ function trainBatch(inputsCPU, labelsCPU)
    inputs:resize(inputsCPU:size()):copy(inputsCPU)
    labels:resize(labelsCPU:size()):copy(labelsCPU)
 
-   local err, outputs
-   if opt.binaryWeight == 1 then
-     feval = function(x)
-       model:zeroGradParameters()
-         local realParams = parameters:clone()
-         for i =1, #convNodes do
-           --if i ~= #convNodes then
-             cutorch.setDevice(math.ceil(i/(#convNodes/opt.nGPU)))
-           --else
-           --  cutorch.setDevice(opt.GPU)
-           --end
+    local err, outputs
+    if opt.binaryWeight then
+     realParams:copy(parameters)
+     binarizeConvParms(convNodes)
+    end
 
-           local n = convNodes[i].weight[1]:nElement()
-           local s = convNodes[i].weight:size()
-           local m = convNodes[i].weight:norm(1,4):sum(3):sum(2):div(n);
-           convNodes[i].weight:sign():cmul(m:expand(s))
-         end
-         cutorch.setDevice(opt.GPU)
-         outputs = model:forward(inputs)
-         err = criterion:forward(outputs, labels)
-         local gradOutputs = criterion:backward(outputs, labels)
-         model:backward(inputs, gradOutputs)
-         parameters:copy(realParams);
-         return err, gradParameters
-     end
-   else
-     feval = function(x)
-       model:zeroGradParameters()
-       outputs = model:forward(inputs)
-       err = criterion:forward(outputs, labels)
-       local gradOutputs = criterion:backward(outputs, labels)
-       model:backward(inputs, gradOutputs)
-       return err, gradParameters
-     end
-   end 
+    model:zeroGradParameters()
+    --debugger = require('fb.debugger')
 
-   for i = 1,optimState.repeatBatch do
-     optim.sgd(feval, parameters, optimState)
+    outputs = model:forward(inputs)
+    err = criterion:forward(outputs, labels)
+    local gradOutputs = criterion:backward(outputs, labels)
+    model:backward(inputs, gradOutputs)      
+    
+    if opt.binaryWeight then
+      parameters:copy(realParams)
+      if opt.nGPU >1 then
+        model:syncParameters()
+      end
+    end
+
+  local feval = function()
+      return err, gradParameters
    end
+   
+   if opt.optimType == "sgd" then
+      optim.sgd(feval, parameters, optimState)
+   elseif opt.optimType == "adam" then
+      optim.adam(feval, parameters, optimState)
+   end
+
    -- DataParallelTable's syncParameters
-   model:apply(function(m) if m.syncParameters then m:syncParameters() end end)
+   if model.needsSync then
+      model:syncParameters()
+   end
+   
 
    cutorch.synchronize()
    batchNumber = batchNumber + 1
    loss_epoch = loss_epoch + err
-   -- top-1 error
-   local top1 = 0
-   do
-      local _,prediction_sorted = outputs:float():sort(2, true) -- descending
-      for i=1,opt.batchSize do
-	 if prediction_sorted[i][1] == labelsCPU[i] then
-	    top1_epoch = top1_epoch + 1;
-	    top1 = top1 + 1
-	 end
-      end
-      top1 = top1 * 100 / opt.batchSize;
-   end
-   -- Calculate top-1 error, and print information
-   print(('Epoch: [%d][%d/%d]\tTime %.3f Err %.4f Top1-%%: %.2f LR %.0e DataLoadingTime %.3f'):format(
-          epoch, batchNumber, opt.epochSize, timer:time().real, err, top1,
-          optimState.learningRate, dataLoadingTime))
+   
+   local pred = outputs:float()
+     local top1, top5 = computeScore(pred, labelsCPU, 1)
+     top1Sum = top1Sum + top1
+     top5Sum = top5Sum + top5
+     -- Calculate top-1 error, and print information
+     print(('Epoch: [%d][%d/%d]\tTime %.3f Err %.4f Top1-%%: %.2f (%.2f)  Top5-%%: %.2f (%.2f) LR %.0e DataLoadingTime %.3f'):format(
+            epoch, batchNumber, opt.epochSize, timer:time().real, err, top1, top1Sum/batchNumber, top5, top5Sum/batchNumber, optimState.learningRate, dataLoadingTime))
 
    dataTimer:reset()
 end

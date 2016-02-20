@@ -13,6 +13,7 @@ require 'paths'
 require 'xlua'
 require 'optim'
 require 'nn'
+require 'newLayers'
 
 torch.setdefaulttensortype('torch.FloatTensor')
 
@@ -23,10 +24,6 @@ opt = opts.parse(arg)
 nClasses = opt.nClasses
 
 paths.dofile('util.lua')
-paths.dofile('SpatialCMul.lua')
-paths.dofile('SelfIndex.lua')
-paths.dofile('CMaxTable.lua')
-
 paths.dofile('model.lua')
 opt.imageSize = model.imageSize or opt.imageSize
 opt.imageCrop = model.imageCrop or opt.imageCrop
@@ -39,16 +36,15 @@ torch.manualSeed(opt.manualSeed)
 print('Saving everything to: ' .. opt.save)
 os.execute('mkdir -p ' .. opt.save)
 
-
 paths.dofile('data.lua')
-
 paths.dofile('train.lua')
 paths.dofile('test.lua')
+
 
 epoch = opt.epochNumber
 
 for i=1,opt.nEpochs do
-   train()
+   --train()
    test()
    epoch = epoch + 1
 end

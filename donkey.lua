@@ -29,9 +29,11 @@ local sampleSize = {3, opt.cropSize, opt.cropSize}
 
 
 local function loadImage(path)
+
    local input = image.load(path, 3, 'float')
-   local random_scale = 1+torch.rand(1)[1]*(224/256)
-   if opt.testFlag == 1  then 
+
+   local random_scale = 1--+torch.rand(1)[1]--*(224/256)
+   if opt.testMode  then
       random_scale =1;
    end
 
@@ -55,10 +57,10 @@ local mean,std
 -- function to load the image, jitter it appropriately (random crops etc.)
 local trainHook = function(self, path)
    collectgarbage()
-   opt.testFlag = 0
+   opt.testMode = false
    local excep, input = pcall(loadImage,path);
    if not excep then
-      input = torch.Tensor(3,opt.imageSize,opt.imageSize):fill(100);
+      input = torch.Tensor(3,opt.imageSize,opt.imageSize):fill(mean[1]);
    end
    local iW = input:size(3)
    local iH = input:size(2)
@@ -121,10 +123,10 @@ end
 -- function to load the image
 testHook = function(self, path)
    collectgarbage()
-   opt.testFlag = 1
+   opt.testMode = true
    local excep, input = pcall(loadImage,path);
    if not excep then
-      input = torch.CudaTensor(3,opt.imageSize,opt.imageSize):fill(100);
+      input = torch.CudaTensor(3,opt.imageSize,opt.imageSize):fill(mean[1]);
    end
    local oH = sampleSize[2]
    local oW = sampleSize[3]
@@ -132,7 +134,7 @@ testHook = function(self, path)
    local iH = input:size(2)
    local w1 = math.ceil((iW-oW)/2)
    local h1 = math.ceil((iH-oH)/2)
-   local out = image.crop(input, w1, h1, w1+oW, h1+oW) -- center patch
+   local out = image.crop(input, w1, h1, w1+oW, h1+oH) -- center patch
    -- mean/std
    for i=1,3 do -- channels
       if mean then out[{{i},{},{}}]:add(-mean[i]) end
