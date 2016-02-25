@@ -76,14 +76,13 @@ local SBatchNorm = cudnn.SpatialBatchNormalization
       s:add(SBatchNorm(n))
       s:add(ReLU(true))
       s:add(ContConvolution(n,n,3,3,1,1,1,1))
-      
+      s:add(SBatchNorm(n))
 
       return nn.Sequential()
          :add(nn.ConcatTable()
             :add(s)
             :add(shortcut(nInputPlane, n, stride)))
          :add(nn.CAddTable(true))
-         :add(SBatchNorm(n))
          :add(ReLU(true))
    end
 

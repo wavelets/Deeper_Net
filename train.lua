@@ -48,11 +48,11 @@ local function paramsForEpoch(epoch)
     end
     local regimes = {
         -- start, end,    LR,   WD,
-        { 1,     5,    1e-1,   1e-4 },
-        { 6,     10,   1e-2,   1e-4  },
-        { 11,    15,   1e-3,      0},
-        { 16,    52,   1e-4,      0},
-        { 53,    1e8,   1e-4,     0 },
+        { 1,     2,    1e-1,  1e-4},
+        { 3,    4,   1e-2,   1e-4},
+        { 5,    6,   1e-3,   0},
+        { 31,    52,   1e-4,   0},
+        { 53,    1e8,   1e-4,  0},
     }
 
     for _, row in ipairs(regimes) do
@@ -81,7 +81,7 @@ function train()
       optimState.dampening = 0.0
       optimState.weightDecay = params.weightDecay
       if opt.optimType == "adam" then
-        optimState.learningRate =  0.01*optimState.learningRate
+        optimState.learningRate =  0.001
       end
    end
    
@@ -131,29 +131,31 @@ function train()
 
    -- clear the intermediate states in the model before saving to disk
    -- this saves lots of disk space
-   model:clearState()
+   --model:clearState()
    saveDataParallel(paths.concat(opt.save, 'model_' .. epoch .. '.t7'), model) -- defined in util.lua
    torch.save(paths.concat(opt.save, 'optimState_' .. epoch .. '.t7'), optimState)
 end -- of train()
 -------------------------------------------------------------------------------------------
 -- GPU inputs (preallocate)
+collectgarbage()
 local inputs = torch.CudaTensor()
 local labels = torch.CudaTensor()
 
 local timer = torch.Timer()
 local dataTimer = torch.Timer()
+local procTimer = torch.Timer()
 
 local parameters, gradParameters = model:getParameters()
 local realParams = parameters:clone()
 local convNodes = model:findModules('cudnn.SpatialConvolution')
-
+collectgarbage()
 
 -- 4. trainBatch - Used by train() to train a single batch after the data is loaded.
 function trainBatch(inputsCPU, labelsCPU)
    cutorch.synchronize()
    collectgarbage()
    local dataLoadingTime = dataTimer:time().real
-   timer:reset()
+   procTimer:reset()
 
    -- transfer over to GPU
    inputs:resize(inputsCPU:size()):copy(inputsCPU)
@@ -164,12 +166,12 @@ function trainBatch(inputsCPU, labelsCPU)
      realParams:copy(parameters)
      binarizeConvParms(convNodes)
     end
-
+    
     model:zeroGradParameters()
-    --debugger = require('fb.debugger')
 
     outputs = model:forward(inputs)
     err = criterion:forward(outputs, labels)
+    
     local gradOutputs = criterion:backward(outputs, labels)
     model:backward(inputs, gradOutputs)      
     
@@ -200,13 +202,15 @@ function trainBatch(inputsCPU, labelsCPU)
    batchNumber = batchNumber + 1
    loss_epoch = loss_epoch + err
    
+
    local pred = outputs:float()
      local top1, top5 = computeScore(pred, labelsCPU, 1)
      top1Sum = top1Sum + top1
      top5Sum = top5Sum + top5
      -- Calculate top-1 error, and print information
-     print(('Epoch: [%d][%d/%d]\tTime %.3f Err %.4f Top1-%%: %.2f (%.2f)  Top5-%%: %.2f (%.2f) LR %.0e DataLoadingTime %.3f'):format(
-            epoch, batchNumber, opt.epochSize, timer:time().real, err, top1, top1Sum/batchNumber, top5, top5Sum/batchNumber, optimState.learningRate, dataLoadingTime))
+     print(('Epoch: [%d][%d/%d]\tTime %.3f(%.3f) Err %.4f Top1-%%: %.2f (%.2f)  Top5-%%: %.2f (%.2f) LR %.0e DataTime %.3f'):format(
+            epoch, batchNumber, opt.epochSize, timer:time().real ,procTimer:time().real ,err, top1, top1Sum/batchNumber, top5, top5Sum/batchNumber, optimState.learningRate, dataLoadingTime))
 
    dataTimer:reset()
+   timer:reset()
 end

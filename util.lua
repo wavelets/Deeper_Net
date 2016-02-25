@@ -48,7 +48,7 @@ function saveDataParallel(filename, model)
    if torch.type(model) == 'nn.DataParallelTable' then
       torch.save(filename, cleanDPT(model))
    elseif torch.type(model) == 'nn.Sequential' then
-      torch.save(filename, temp_model)
+      torch.save(filename, model)
    else
       error('This saving function only works with Sequential or DataParallelTable modules.')
    end
@@ -68,8 +68,15 @@ function loadParams(model,saved_model)
       end
 end
 
-function binarizeConvParms(convNodes)
+
+function zeroBias(convNodes)
    for i =1, #convNodes do
+    local n = convNodes[i].bias:fill(0)
+   end
+end
+
+function binarizeConvParms(convNodes)
+   for i =2, #convNodes-1 do
     local n = convNodes[i].weight[1]:nElement()
     local s = convNodes[i].weight:size()
     local m = convNodes[i].weight:norm(1,4):sum(3):sum(2):div(n);
@@ -97,7 +104,7 @@ function rand_initialize(layer)
   if tn == "cudnn.SpatialConvolution" then
     local c  = math.sqrt(2.0 / (layer.kH * layer.kW * layer.nInputPlane));
     layer.weight:copy(torch.randn(layer.weight:size()) * c)
-    layer.bias:fill(0)
+    layer.bias:fill(0.1)
   elseif tn == "nn.SpatialConvolution" then
     local c  = math.sqrt(2.0 / (layer.kH * layer.kW * layer.nInputPlane));
     layer.weight:copy(torch.randn(layer.weight:size()) * c)

@@ -77,13 +77,12 @@ local SBatchNorm = cudnn.SpatialBatchNormalization
       s:add(SBatchNorm(n))
       s:add(ReLU(true))
       s:add(Convolution(n,n*4,1,1,1,1,0,0))
-      
+      s:add(SBatchNorm(n * 4))
       return nn.Sequential()
          :add(nn.ConcatTable()
             :add(s)
             :add(shortcut(nInputPlane, n * 4, stride)))
          :add(nn.CAddTable(true))
-         :add(SBatchNorm(n * 4))
          :add(ReLU(true))
    end
 
@@ -123,7 +122,8 @@ local SBatchNorm = cudnn.SpatialBatchNormalization
       model:add(layer(block, 128, def[2], 2))
       model:add(layer(block, 256, def[3], 2))
       model:add(layer(block, 512, def[4], 2))
-      model:add(Avg(7, 7, 1, 1))
+      --model:add(layer(block, 4096, def[5],2))
+      model:add(Avg(7, 7, 1, 1)) 
       model:add(cudnn.SpatialConvolution(nFeatures, opt.nClasses,1,1))
       model:add(nn.View(opt.nClasses))
       model:add(nn.LogSoftMax())

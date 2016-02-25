@@ -97,7 +97,6 @@ function testBatch(inputsCPU, labelsCPU)
    local pred = outputs:float()
 
    local top1, top5 = computeScore(pred, labelsCPU, 1)
-   debugger.enter()
    top1Sum = top1Sum + top1
    top5Sum = top5Sum + top5
    

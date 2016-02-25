@@ -25,6 +25,7 @@ nClasses = opt.nClasses
 
 paths.dofile('util.lua')
 paths.dofile('model.lua')
+paths.dofile('bsgd.lua')
 opt.imageSize = model.imageSize or opt.imageSize
 opt.imageCrop = model.imageCrop or opt.imageCrop
 
@@ -44,7 +45,7 @@ paths.dofile('test.lua')
 epoch = opt.epochNumber
 
 for i=1,opt.nEpochs do
-   --train()
+   train()
    test()
    epoch = epoch + 1
 end

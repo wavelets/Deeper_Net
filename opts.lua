@@ -24,7 +24,7 @@ function M.parse(arg)
     cmd:option('-nGPU',               1, 'Number of GPUs to use by default')
     cmd:option('-backend',     'cudnn', 'Options: cudnn | ccn2 | cunn')
     ------------- Data options ------------------------
-    cmd:option('-nDonkeys',        4, 'number of donkeys to initialize (data loading threads)')
+    cmd:option('-nDonkeys',        8, 'number of donkeys to initialize (data loading threads)')
     cmd:option('-imageSize',         256,    'Smallest side of the resized image')
     cmd:option('-cropSize',          224,    'Height and Width of image crop to be used as input layer')
     cmd:option('-nClasses',        1000, 'number of classes in the dataset')
@@ -40,13 +40,14 @@ function M.parse(arg)
     cmd:option('-shareGradInput',  true, 'Sharing the gradient memory')
     cmd:option('-binaryWeight',    false, 'Sharing the gradient memory')
     ---------- Model options ----------------------------------
-    cmd:option('-netType',     'alexnetowtbn', 'Options: alexnet | overfeat | alexnetowtbn | vgg | googlenet | resnet')
+    cmd:option('-netType',     'alexnet', 'Options: alexnet | overfeat | alexnetowtbn | vgg | googlenet | resnet')
     cmd:option('-optimType',     'sgd', 'Options: sgd | adam')
     cmd:option('-retrain',     'none', 'provide path to model to retrain with')
     cmd:option('-loadParams',  'none', 'provide path to model to load the parameters')
     cmd:option('-optimState',  'none', 'provide path to an optimState to reload from')
     cmd:option('-depth',  18, 'Depth for resnet')
     cmd:option('-shortcutType',  'B', 'type of short cut in resnet: A|B|C')
+    cmd:option('-dropout', 0.5 , 'Dropout ratio')
 
     cmd:text()
 
@@ -54,7 +55,7 @@ function M.parse(arg)
     -- add commandline specified options
     opt.save = paths.concat(opt.cache,
                             cmd:string(opt.netType, opt,
-                                       {netType=true, retrain=true, optimState=true, cache=true, data=true}))
+                                       {netType=true, retrain=true, loadParams=true, optimState=true, cache=true, data=true}))
     -- add date/time
     opt.save = paths.concat(opt.save, '' .. os.date():gsub(' ',''))
     return opt
