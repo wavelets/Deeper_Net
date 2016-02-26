@@ -48,10 +48,10 @@ local function paramsForEpoch(epoch)
     end
     local regimes = {
         -- start, end,    LR,   WD,
-        { 1,     2,    1e-1,  1e-4},
-        { 3,    4,   1e-2,   1e-4},
-        { 5,    6,   1e-3,   0},
-        { 31,    52,   1e-4,   0},
+        { 1,    4,    1e-1,  1e-4},
+        { 5,    8,    1e-2,   1e-4},
+        { 9,    12,   1e-3,   0},
+        { 13,   52,   1e-4,   0},
         { 53,    1e8,   1e-4,  0},
     }
 
@@ -66,6 +66,10 @@ end
 trainLogger = optim.Logger(paths.concat(opt.save, 'train.log'))
 local batchNumber
 local top1Sum, top5Sum, loss_epoch
+
+
+
+
 
 -- 3. train - this function handles the high-level training loop,
 --            i.e. load data, train model, save model and state to disk
@@ -145,10 +149,6 @@ local timer = torch.Timer()
 local dataTimer = torch.Timer()
 local procTimer = torch.Timer()
 
-local parameters, gradParameters = model:getParameters()
-local realParams = parameters:clone()
-local convNodes = model:findModules('cudnn.SpatialConvolution')
-collectgarbage()
 
 -- 4. trainBatch - Used by train() to train a single batch after the data is loaded.
 function trainBatch(inputsCPU, labelsCPU)

@@ -25,9 +25,6 @@ function test()
    -- set the dropouts to evaluate mode
    model:evaluate()
    
-   local parameters, gradParameters = model:getParameters()
-   local realParams = parameters:clone()
-   local convNodes = model:findModules('cudnn.SpatialConvolution')
    if opt.binaryWeight then
       binarizeConvParms(convNodes)
    end

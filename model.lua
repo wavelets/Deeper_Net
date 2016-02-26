@@ -67,6 +67,13 @@ if opt.nGPU >1 then
    model = makeDataParallel(model, opt.nGPU,true,true)
 end
 
+--getting the parameters and gradient pointers
+parameters, gradParameters = model:getParameters()
+realParams = parameters:clone()
+convNodes = model:findModules('cudnn.SpatialConvolution')
+
+
+
 -- much faster
  cudnn.fastest = true
  cudnn.benchmark = true
