@@ -32,7 +32,7 @@ local function loadImage(path)
 
    local input = image.load(path, 3, 'float')
 
-   local random_scale = 1--+torch.rand(1)[1]--*(224/256)
+   local random_scale = 1+torch.rand(1)[1]*opt.scalingFactor--(224/256) = 0.875
    if opt.testMode  then
       random_scale =1;
    end

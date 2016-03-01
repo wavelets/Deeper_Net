@@ -48,10 +48,10 @@ local function paramsForEpoch(epoch)
     end
     local regimes = {
         -- start, end,    LR,   WD,
-        { 1,    4,    1e-1,  1e-4},
-        { 5,    8,    1e-2,   1e-4},
-        { 9,    12,   1e-3,   0},
-        { 13,   52,   1e-4,   0},
+        { 1,    30,    1e-1,  1e-4},
+        { 31,   40,    1e-2,   1e-4},
+        { 41,   50,   1e-3,   0},
+        { 51,   52,   1e-4,   0},
         { 53,    1e8,   1e-4,  0},
     }
 
@@ -85,7 +85,8 @@ function train()
       optimState.dampening = 0.0
       optimState.weightDecay = params.weightDecay
       if opt.optimType == "adam" then
-        optimState.learningRate =  0.001
+        optimState.learningRate =optimState.learningRate*0.01
+        --optimState.t =  1
       end
    end
    

@@ -16,7 +16,7 @@ function M.parse(arg)
     cmd:text('Options:')
     ------------ General options --------------------
 
-    cmd:option('-cache', '/mnt/raid00/' .. os.getenv('USER') ..'/NNExpLog/imagenet1k/', 'subdirectory in which to save/log experiments')
+    cmd:option('-cache', '/mnt/raid00/' .. os.getenv('USER') ..'/NNExpLog/imagenet1k_fullsize/', 'subdirectory in which to save/log experiments')
     cmd:option('-data', './imagenet/imagenet_raw_images/256', 'Home of ImageNet dataset')
     cmd:option('-dataset',  'imagenet', 'Dataset Name: imagenet |cifar')
     cmd:option('-manualSeed',         2, 'Manually set RNG seed')
@@ -28,6 +28,8 @@ function M.parse(arg)
     cmd:option('-imageSize',         256,    'Smallest side of the resized image')
     cmd:option('-cropSize',          224,    'Height and Width of image crop to be used as input layer')
     cmd:option('-nClasses',        1000, 'number of classes in the dataset')
+    cmd:option('-scalingFactor',   0, 'number of classes in the dataset')
+
     ------------- Training options --------------------
     cmd:option('-nEpochs',         55,    'Number of total epochs to run')
     cmd:option('-epochSize',       5000, 'Number of batches per epoch')
